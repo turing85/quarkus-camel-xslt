@@ -1,0 +1,105 @@
+= `XPathAPI` not working in native mode
+:listing-caption: Listing
+
+Calls to `XPathAPI` (which part of `xalan:xalan` and is provided as transitive dependency of `quarkus-camel-xslt`) are not working with native compilation.
+
+== Description
+The usage of `XPathAPI.eval(...)` (which we are using in xref:src/main/java/de/turing85/MyProcessor.java[`MyProcessor.java`]) compiles fine natively, but results in an exception at runtime:
+
+.Exception at runtime
+[source]
+----
+java.util.MissingResourceException: Could not load any resource bundles.org.apache.xml.res.XMLErrorResources
+----
+
+== Reproducer Steps
+* Checkout the project
+
+[source,bash]
+----
+git clone git@github.com:turing85/quarkus-camel-xslt.git
+cd quarkus-camel-xslt
+----
+
+* Build the project, execute all tests
+
+[source,bash]
+----
+./mvn clean verify
+----
+
+* Notice that all tests succeed
+
+* Repeat, but with native compilation activated
+
+[source,bash]
+----
+./mvnw --define native clean verify
+----
+
+* Notice that the quarkus tests succeed
+
+[source]
+----
+...
+...
+[INFO] --- maven-surefire-plugin:3.0.0-M7:test (default-test) @ quarkus-camel-xslt ---
+...
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.348 s - in de.turing85.GreetingResourceTest
+...
+----
+
+* Notice that the integratoin tests fail
+
+[source]
+----
+...
+[INFO] --- maven-failsafe-plugin:3.0.0-M7:integration-test (default) @ quarkus-camel-xslt ---
+...
+2023-03-22 02:15:21,660 ERROR [org.apa.cam.pro.err.DefaultErrorHandler] (executor-thread-0) Failed delivery for (MessageId: 26CEA3B261100AA-0000000000000000 on ExchangeId: 26CEA3B261100AA-0000000000000000). Exhausted after delivery attempt: 1 caught: java.util.MissingResourceException: Could not load any resource bundles.org.apache.xml.res.XMLErrorResources
+
+Message History (source location and message history is disabled)
+---------------------------------------------------------------------------------------------------------------------------------------
+Source                                   ID                             Processor                                          Elapsed (ms)
+                                         route1/route1                  from[platform-http:///hello?httpMethodRestrict=POS            1
+	...
+                                         route1/process1                Processor@0x2d479a84                                          0
+
+Stacktrace
+---------------------------------------------------------------------------------------------------------------------------------------: java.util.MissingResourceException: Could not load any resource bundles.org.apache.xml.res.XMLErrorResources
+	at org.apache.xml.res.XMLMessages.loadResourceBundle(XMLMessages.java:189)
+	at org.apache.xml.res.XMLMessages.createXMLMessage(XMLMessages.java:84)
+	at org.apache.xml.utils.ObjectPool.getInstance(ObjectPool.java:142)
+	at org.apache.xml.utils.StringBufferPool.get(StringBufferPool.java:44)
+	at org.apache.xml.dtm.ref.dom2dtm.DOM2DTM.getStringValue(DOM2DTM.java:822)
+	at org.apache.xpath.objects.XNodeSet.getStringFromNode(XNodeSet.java:217)
+	at org.apache.xpath.objects.XNodeSet.str(XNodeSet.java:280)
+	at org.apache.xpath.objects.XObject.toString(XObject.java:312)
+	at de.turing85.MyProcessor.process(MyProcessor.java:14)
+	at de.turing85.MyProcessor_ClientProxy.process(Unknown Source)
+	at org.apache.camel.support.processor.DelegateSyncProcessor.process(DelegateSyncProcessor.java:65)
+	at org.apache.camel.processor.errorhandler.RedeliveryErrorHandler$SimpleTask.run(RedeliveryErrorHandler.java:477)
+	at org.apache.camel.impl.engine.DefaultReactiveExecutor$Worker.schedule(DefaultReactiveExecutor.java:189)
+	at org.apache.camel.impl.engine.DefaultReactiveExecutor.scheduleMain(DefaultReactiveExecutor.java:61)
+	at org.apache.camel.processor.Pipeline.process(Pipeline.java:182)
+	at org.apache.camel.impl.engine.CamelInternalProcessor.process(CamelInternalProcessor.java:399)
+	at org.apache.camel.component.platform.http.vertx.VertxPlatformHttpConsumer.lambda$handleRequest$2(VertxPlatformHttpConsumer.java:201)
+	at io.vertx.core.impl.ContextBase.lambda$null$0(ContextBase.java:137)
+	at io.vertx.core.impl.ContextInternal.dispatch(ContextInternal.java:264)
+	at io.vertx.core.impl.ContextBase.lambda$executeBlocking$1(ContextBase.java:135)
+	at io.quarkus.vertx.core.runtime.VertxCoreRecorder$14.runWith(VertxCoreRecorder.java:576)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.run(EnhancedQueueExecutor.java:2449)
+	at org.jboss.threads.EnhancedQueueExecutor$ThreadBody.run(EnhancedQueueExecutor.java:1478)
+	at org.jboss.threads.DelegatingRunnable.run(DelegatingRunnable.java:29)
+	at org.jboss.threads.ThreadLocalResettingRunnable.run(ThreadLocalResettingRunnable.java:29)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base@17.0.5/java.lang.Thread.run(Thread.java:833)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:775)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.posix.thread.PosixPlatformThreads.pthreadStartRoutine(PosixPlatformThreads.java:203)
+
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 2.108 s <<< FAILURE! - in de.turing85.GreetingResourceIT
+...
+----
+
+== Workaround
+There is on real workaround per-se, the only course of action is  to not use `XPathAPI`.
