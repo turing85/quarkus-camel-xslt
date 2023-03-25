@@ -17,6 +17,8 @@ public class Route extends RouteBuilder {
   @Override
   public void configure() {
     from(platformHttp("/hello").httpMethodRestrict(HttpMethod.POST))
-        .process(myProcessor);
+        .setProperty("relevantText", xpath("/body/relevant-text/text()", String.class))
+        .process(myProcessor)
+        .removeProperty("relevantText");
   }
 }
